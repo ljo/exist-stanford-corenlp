@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<div xmlns="http://www.w3.org/1999/xhtml" data-template="templates:surround" data-template-with="templates/page.html" data-template-at="content">
+    <h1>Appy the NER classifier model</h1>
+    <p>Choose a classifier to use and a document to appy it to.</p>
+    <p>The classified annotated document will be returned to you within seconds depending on the size of your provided text.</p>
+    <h2>Upload the classifier and the document:</h2> 
+    <form action="/exist/rest/db/apps/stanford-corenlp/modules/stanford-corenlp.xquery" method="post" enctype="multipart/form-data">
+      <input type="file" name="classify-classifier" accept=".ser, .gz" />
+      <input type="file" name="classify-wp-doc" accept=".xml, .odt, .docx, .doc, .txt" />
+      <input type="hidden" name="req-mode" value="classify" />
+      <input type="submit" />
+    </form>
+</div>

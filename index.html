@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<div xmlns="http://www.w3.org/1999/xhtml" data-template="templates:surround" data-template-with="templates/page.html" data-template-at="content">
+    <h1>Stanford CoreNLP annotation pipeline XQuery Module</h1>
+    <p>An XQuery module to integrate the <a href="https://stanfordnlp.github.io/CoreNLP/">Stanford CoreNLP annotation pipeline library suite</a>
+    into eXist-db. The package can be installed via the package manager in the eXist-db dashboard or you can <a href="building.html">build</a>
+        it yourself.
+    </p>
+    <h2>Examples</h2>
+    <p>The module currently provides support to create a Named Entity Recognition (NER) classifier model and run some of the pipeline tools, including the NER classifier, on your documents.</p>
+    <h3>Named entity recognition and classification</h3>
+    <p>To create a NER classifier based on your own document's data start with the following steps:</p>
+<ol>
+  <li>Upload your word processor document for tokenization and formatting of the document <a href="tokenize.html">tokenize and format</a></li>
+  <li>Annotate the spreadsheet you received in step 1.</li>
+  <li>If you do not annotate the whole text, make sure to make a new spreadsheet document only containing the annotated part.</li>
+  <li>Upload the annotated spreadsheet to train the classifier model <a href="train-classifier.html">train the classifier</a>. The classifier model will be returned to you within a minute or two depending on the size of your provided text.</li>
+</ol>
+</div>

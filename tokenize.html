@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<div xmlns="http://www.w3.org/1999/xhtml" data-template="templates:surround" data-template-with="templates/page.html" data-template-at="content">
+    <h1>Tokenization</h1>
+    <p>In order yo create a named entity recognition (NER) classifier model based on your own texts you need to tokenize and format the text document before you annotate it.</p>
+    <h2>Upload your text in a wordprocessing document</h2>
+    <form action="/exist/rest/db/apps/stanford-corenlp/modules/stanford-corenlp.xquery" method="post" enctype="multipart/form-data">
+      <input type="file" name="tokenize-wp-doc" accept=".odt, .docx, .doc, .txt" />
+      <input type="hidden" name="req-mode" value="tokenize" />
+      <input type="submit" />
+    </form>
+</div>

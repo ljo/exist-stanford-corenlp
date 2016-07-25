@@ -1,0 +1,69 @@
+/*
+ *   exist-stanford-corenlp: XQuery module to integrate the stanford CoreNLP
+ *   annotation pipeline library with eXist-db.
+ *   Copyright (C) 2016 ljo: copied from stanford-ner by wolfgangmm and myself.
+ *
+ *   This program is free software: you can redistribute it and/or modify
+ *   it under the terms of the GNU General Public License as published by
+ *   the Free Software Foundation, either version 3 of the License, or
+ *   (at your option) any later version.
+ *
+ *   This program is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+package org.exist.xquery.corenlp;
+
+import edu.stanford.nlp.ie.crf.CRFClassifier;
+import org.exist.xquery.XPathException;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.Properties;
+
+/**
+ * Load the word segmenter for Chinese. This is required to achieve acceptable results.
+ */
+public class ChineseSegmenter {
+
+    private static ChineseSegmenter instance = null;
+
+    public static ChineseSegmenter getInstance(Path dataDir) throws XPathException {
+        if (instance == null) {
+            instance = new ChineseSegmenter(dataDir);
+        }
+        return instance;
+    }
+
+    private CRFClassifier classifier;
+
+    public ChineseSegmenter(Path dataDir) throws XPathException {
+        // "ctb.gz"
+        Properties props = new Properties();
+        props.setProperty("NormalizationTable", new File(dataDir.toFile(), "norm.simp.utf8").getAbsolutePath());
+        props.setProperty("normTableEncoding", "UTF-8");
+        props.setProperty("sighanCorporaDict", dataDir.toAbsolutePath().toString());
+        props.setProperty("sighanPostProcessing", "true");
+        props.setProperty("serDictionary", new File(dataDir.toFile(), "dict-chris6.ser.gz").getAbsolutePath());
+
+        classifier = new CRFClassifier(props);
+        try {
+            classifier.loadClassifier(new File(dataDir.toFile(), "ctb.gz"), props);
+        } catch (IOException e) {
+            throw new XPathException(e.getMessage());
+        } catch (ClassNotFoundException e) {
+            throw new XPathException(e.getMessage());
+        } catch (Exception e) {
+            throw new XPathException(e.getMessage());
+        }
+    }
+
+    public String segment(String input) {
+        return classifier.classifyToString(input);
+    }
+}
