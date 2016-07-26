@@ -343,14 +343,22 @@ public class TrainClassifier extends BasicFunction {
 			} else if(cell != null && cell.getCellType() == Cell.CELL_TYPE_NUMERIC) {
 			    tok.setWord(cell == null ? "" : cell.getNumericCellValue() + "");
 			}
-
 			break;
 		    case 1:
-			tok.setNER(cell == null ? "" : cell.getStringCellValue());
-			tok.set(CoreAnnotations.AnswerAnnotation.class, cell == null ? "O" : cell.getStringCellValue());
+			if (cell != null && cell.getCellType() == Cell.CELL_TYPE_STRING) {
+			    tok.setNER(cell == null ? "" : cell.getStringCellValue());
+			    tok.set(CoreAnnotations.AnswerAnnotation.class, cell == null ? "O" : cell.getStringCellValue());
+			} else if(cell != null && cell.getCellType() == Cell.CELL_TYPE_NUMERIC) {
+			    tok.setNER(cell == null ? "" : cell.getNumericCellValue() + "");
+			    tok.set(CoreAnnotations.AnswerAnnotation.class, cell == null ? "O" : cell.getNumericCellValue() + "");
+			}
 			break;
 		    case 2:
-			tok.setTag(cell == null ? "" : cell.getStringCellValue());
+			if (cell != null && cell.getCellType() == Cell.CELL_TYPE_STRING) {
+			    tok.setTag(cell == null ? "" : cell.getStringCellValue());
+			} else if(cell != null && cell.getCellType() == Cell.CELL_TYPE_NUMERIC) {
+			    tok.setTag(cell == null ? "" : cell.getNumericCellValue() + "");
+			}
 			break;
 		    default: break;
 		    }
