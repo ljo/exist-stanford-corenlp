@@ -293,7 +293,7 @@ public class TrainClassifier extends BasicFunction {
 	String fileName = "localFilePath"; 
 	String extraSuffix = (inputFormat != InputDocType.XLSX) ? "" : "x";
 	//try (InputStream is = Files.newInputStream(tempInFile)) {
-	try (InputStream is = uploadedFileBase64String == null ? uploadedFileBase64String.getInputStream() : new Resource(fileName + extraSuffix).getInputStream()) {
+	try (InputStream is = uploadedFileBase64String != null ? uploadedFileBase64String.getInputStream() : new Resource(fileName + extraSuffix).getInputStream()) {
 	    if (inputFormat == InputDocType.XLSX) {
 		workbook = new XSSFWorkbook(is);
 	    } else {
@@ -348,7 +348,7 @@ public class TrainClassifier extends BasicFunction {
 	List<CoreLabel> document = new ArrayList<>();
 
 	//try (BufferedReader tsv = Files.newBufferedReader(tempInFile)) {
-	try (BufferedReader tsv = uploadedFileBase64String == null ? new BufferedReader(new InputStreamReader(uploadedFileBase64String.getInputStream(), "UTF-8")) : new Resource(localFilePath).getBufferedReader()) {
+	try (BufferedReader tsv = uploadedFileBase64String != null ? new BufferedReader(new InputStreamReader(uploadedFileBase64String.getInputStream(), "UTF-8")) : new Resource(localFilePath).getBufferedReader()) {
 	    while ((line = tsv.readLine()) != null) {
 		CoreLabel tok = new CoreLabel();
 		List<String> cells = Arrays.asList(line.split(separator));
