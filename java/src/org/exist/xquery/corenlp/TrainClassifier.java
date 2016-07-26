@@ -18,12 +18,14 @@
  */
 package org.exist.xquery.corenlp;
 
+import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -34,6 +36,7 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
+import java.util.zip.GZIPOutputStream;
 
 import edu.stanford.nlp.ie.AbstractSequenceClassifier;
 import edu.stanford.nlp.ie.crf.CRFClassifier;
@@ -91,7 +94,7 @@ public class TrainClassifier extends BasicFunction {
                 new QName("train-classifier-spreadsheet-doc", StanfordCoreNLPModule.NAMESPACE_URI, StanfordCoreNLPModule.PREFIX),
                 "Train a CRF classifier based on anntations in the provided spreadsheet document. Returns a serialiezed model to use in CRF classification.",
                 new SequenceType[] {
-                    new FunctionParameterSequenceType("classifier", Type.STRING, Cardinality.EXACTLY_ONE,
+                    new FunctionParameterSequenceType("classifier", Type.STRING, Cardinality.ZERO_OR_ONE,
                         "The fully qualified name of an alternative classifier to load. Must be available on the classpath."),
 		    new FunctionParameterSequenceType("configuration", Type.ELEMENT, Cardinality.EXACTLY_ONE,
                                 "The training configuration, e.g. &lt;parameters&gt;&lt;param name='inputFormat' value='ods'/&gt;&lt;param name='backgroundSymbol' value='O'/&gt;&lt;param name='wordCol' value='0'/&gt;&lt;param name='answerCol' value='1'/&gt;&lt;param name='tagCol' value='2'/&gt;&lt;/parameters&gt;. Available input formats ods (default), xlsx, xls or tsv."),
@@ -109,8 +112,9 @@ public class TrainClassifier extends BasicFunction {
     private AnalyzeContextInfo cachedContextInfo;
     private Properties parameters = new Properties();
     private enum InputDocType {ODS, XLSX, XLS, TSV};
-
     private InputDocType inputFormat = InputDocType.ODS;
+    private boolean gzipOutput = true;
+    private String classifierClassPath = null;
     private String backgroundSymbol = "O";
     private String localFilePath = null;
     private int wordCol = 0;
@@ -129,11 +133,13 @@ public class TrainClassifier extends BasicFunction {
 
     @Override
     public Sequence eval(Sequence[] args, Sequence contextSequence) throws XPathException {
-        String classifierClassPath = args[0].getStringValue();
-
         context.pushDocumentContext();
         try {
 	    Collection<List<CoreLabel>> documents;
+	    if (!args[0].isEmpty()) {
+		classifierClassPath = args[0].getStringValue();
+	    }
+
 	    if (!args[1].isEmpty()) {
 		parameters = ParametersExtractor.parseParameters(((NodeValue)args[1].itemAt(0)).getNode());
 	    }
@@ -156,6 +162,9 @@ public class TrainClassifier extends BasicFunction {
 		    } else if ("tsv".equals(value)) {
 			inputFormat = InputDocType.TSV;
 		    }
+		} else if ("outputFormat".equals(property)) {
+		    String value = parameters.getProperty(property);
+		    gzipOutput = value.endsWith("gz") ? true : false;
 		} else if ("backgroundSymbol".equals(property)) {
 		    String value = parameters.getProperty(property);
 		    backgroundSymbol = value;
@@ -180,6 +189,7 @@ public class TrainClassifier extends BasicFunction {
 	    Base64BinaryDocument bvfis = null;
 	    if (documents.isEmpty()) {
 		LOG.error("No annotated text extracted from the spreadsheet document!");
+		throw new XPathException(this, "No annotated text extracted from the spreadsheet document!");
 	    } else {
 		trainClassifier(documents, inputFormat);
 		bvfis = Base64BinaryDocument.getInstance(bvm, Files.newInputStream(tempOutFile));
@@ -199,7 +209,7 @@ public class TrainClassifier extends BasicFunction {
         }
     }
 
-    private void trainClassifier(Collection<List<CoreLabel>> documents, final InputDocType inputFormat) {
+    private void trainClassifier(Collection<List<CoreLabel>> documents, final InputDocType inputFormat) throws XPathException {
 	final Properties props = new Properties();
 	// fixme! - check ocrTrain configurable under other name?
 	//props.setProperty("ocrTrain", "true");
@@ -222,7 +232,16 @@ public class TrainClassifier extends BasicFunction {
 
 	CRFClassifier<CoreLabel> classifier = new CRFClassifier(props);
         classifier.train(documents, new ColumnDocumentReaderAndWriter());
-	classifier.serializeClassifier(tempOutFile.toAbsolutePath().toString());
+	if (gzipOutput) {
+	    try (ObjectOutputStream oos = new ObjectOutputStream(new BufferedOutputStream(
+			new GZIPOutputStream(Files.newOutputStream(tempOutFile))))) {
+	    classifier.serializeClassifier(oos);
+	    } catch (IOException ioe) {
+		throw new XPathException(this, "Unable to write gzipped serialized classifier to temp file: " + ioe.getMessage(), ioe);
+	    }
+	} else {
+	    classifier.serializeClassifier(tempOutFile.toAbsolutePath().toString());
+	}
     }
 
     private Collection<List<CoreLabel>> readSpreadsheet(final InputDocType inputFormat) throws XPathException {
@@ -251,37 +270,41 @@ public class TrainClassifier extends BasicFunction {
     private Collection<List<CoreLabel>> readODSSpreadsheet(final String localFilePath) throws XPathException {
 	Collection<List<CoreLabel>> documents = new ArrayList<>();
 	List<CoreLabel> document = new ArrayList<>();
+	SpreadSheet spreadSheet = null;
 
 	//try (InputStream is = Files.newInputStream(tempInFile)) {
 	try (InputStream is = uploadedFileBase64String != null ? uploadedFileBase64String.getInputStream() : new Resource(localFilePath).getInputStream()) {
-	    SpreadSheet spreadSheet = ODPackage.createFromStream(is, "UserAnnotatedDocument").getSpreadSheet();
-	    
-	    Sheet sheet = spreadSheet.getSheet(0);
-	    
-	    for (int i = 0; i < sheet.getRowCount(); i++) {
-		CoreLabel row = new CoreLabel();
-		String value1 = sheet.getValueAt(0, i).toString();
-		String value2 = sheet.getValueAt(1, i).toString();
-
-		row.setWord(value1);
-		row.setNER(value2);
-		row.set(CoreAnnotations.AnswerAnnotation.class, value2);
-		if (sheet.getColumnCount() > 2) {
-		    String value3 = sheet.getValueAt(2, i).toString();
-		    if (!"".equals(value3) && tagCol > -1) {
-			row.setTag(value3);
-		    }
-		}
-
-		if (!"".equals(value1)) {
-		document.add(row);
-		} else {
-		    documents.add(document);
-		    document = new ArrayList<>();
-		}
-	    }
+	    spreadSheet = ODPackage.createFromStream(is, "UserAnnotatedDocument").getSpreadSheet();
 	} catch (IOException ioe) {
 	    throw new XPathException(this, "Error while reading spreadsheet document: " + ioe.getMessage(), ioe);
+	}
+
+	Sheet sheet = spreadSheet.getSheet(0);
+	    
+	for (int i = 0; i < sheet.getRowCount(); i++) {
+	    CoreLabel tok = new CoreLabel();
+	    String value1 = sheet.getValueAt(0, i).toString();
+	    String value2 = sheet.getValueAt(1, i).toString();
+
+	    tok.setWord(value1);
+	    tok.setNER(value2);
+	    tok.set(CoreAnnotations.AnswerAnnotation.class, value2);
+	    if (sheet.getColumnCount() > 2) {
+		String value3 = sheet.getValueAt(2, i).toString();
+		if (!"".equals(value3) && tagCol > -1) {
+		    tok.setTag(value3);
+		}
+	    }
+
+	    if (!"".equals(value1)) {
+		document.add(tok);
+	    } else {
+		documents.add(document);
+		document = new ArrayList<>();
+	    }
+	}
+	if (document.size() > 0) {
+	    documents.add(document);
 	}
 	return documents;
     }
@@ -290,10 +313,9 @@ public class TrainClassifier extends BasicFunction {
 	Workbook workbook = null;
 	Collection<List<CoreLabel>> documents = new ArrayList<>();
 	List<CoreLabel> document = new ArrayList<>();
-	String fileName = "localFilePath"; 
-	String extraSuffix = (inputFormat != InputDocType.XLSX) ? "" : "x";
-	//try (InputStream is = Files.newInputStream(tempInFile)) {
-	try (InputStream is = uploadedFileBase64String != null ? uploadedFileBase64String.getInputStream() : new Resource(fileName + extraSuffix).getInputStream()) {
+
+	// try (InputStream is = Files.newInputStream(tempInFile)) {
+	try (InputStream is = uploadedFileBase64String != null ? uploadedFileBase64String.getInputStream() : new Resource(localFilePath).getInputStream()) {
 	    if (inputFormat == InputDocType.XLSX) {
 		workbook = new XSSFWorkbook(is);
 	    } else {
@@ -308,35 +330,36 @@ public class TrainClassifier extends BasicFunction {
 	org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
 	Row row;
 	Cell cell;
-	Iterator rows = sheet.rowIterator();
-	while (rows.hasNext()) {
+	for (int rowPos = 0; rowPos <= sheet.getLastRowNum(); rowPos++) {
 	    CoreLabel tok = new CoreLabel();
-	    row = (Row) rows.next();
-	    Iterator cells = row.cellIterator();
-	    int cellPos = 0;
-	    while (cells.hasNext()) {
-		cell = (Cell) cells.next();
-		//if (cell.getCellType() == Cell.CELL_TYPE_STRING) {
-		switch (cellPos) {
-		case 0: tok.setWord(cell.getStringCellValue()); break;
-		case 1: 
-		    tok.setNER(cell.getStringCellValue());
-		    tok.set(CoreAnnotations.AnswerAnnotation.class, cell.getStringCellValue());
-		    break;
-		case 2: tok.setTag(cell.getStringCellValue()); break;
-		default: break;
-		}		   
-		//} else if(cell.getCellType() == Cell.CELL_TYPE_NUMERIC) {
-		    //LOG.error("Cell has numeric value:" + cell.getNumericCellValue());
-		//}
-		cellPos++;
+	    row = (Row) sheet.getRow(rowPos);
+	    if (row != null) {
+		for (int cellPos = 0; cellPos < row.getLastCellNum(); cellPos++) {
+		    cell = row.getCell(cellPos, Row.CREATE_NULL_AS_BLANK);
+		    switch (cellPos) {
+		    case 0:
+			tok.setWord(cell == null ? "" : cell.getStringCellValue());
+			break;
+		    case 1:
+			tok.setNER(cell == null ? "" : cell.getStringCellValue());
+			tok.set(CoreAnnotations.AnswerAnnotation.class, cell == null ? "O" : cell.getStringCellValue());
+			break;
+		    case 2:
+			tok.setTag(cell == null ? "" : cell.getStringCellValue());
+			break;
+		    default: break;
+		    }
+		}
 	    }
-	    if (!"".equals(tok.word())) {
+	    if (row != null && !"".equals(tok.word())) {
 		document.add(tok);
 	    } else {
 		documents.add(document);
 		document = new ArrayList<>(); 
 	    }
+	}
+	if (document.size() > 0) {
+	    documents.add(document);
 	}
 	return documents;
     }
@@ -365,8 +388,9 @@ public class TrainClassifier extends BasicFunction {
 		    document = new ArrayList<>();
 		}
 	    }
-	} catch (FileNotFoundException fe) {
-	    LOG.error(fe);
+	    if (document.size() > 0) {
+		documents.add(document);
+	    }
 	} catch (IOException ioe) {
 	    LOG.error(ioe);
 	    throw new XPathException(this, "Error while reading spreadsheet document: " + ioe.getMessage(), ioe);

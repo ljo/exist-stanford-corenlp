@@ -38,8 +38,8 @@ let $result :=
       response:stream-binary(corenlp:train-classifier-spreadsheet-doc("edu.stanford.nlp.ie.crf.CRFClassifier", $train-config, request:get-uploaded-file-data("train-classifier-spreadsheet-doc")), "application/octet-stream", "user-crf-3class-model." || $train-output-format)
     else 
     <div>Unknown mode {$req-mode} for document(s) {(request:get-uploaded-file-name("tokenize-wp-doc"), request:get-uploaded-file-name("train-classifier-spreadsheet-doc"), request:get-uploaded-file-name("classify-wp-doc"), request:get-uploaded-file-name("classify-classifier"))} with content type {$req-content-type} and short-type of 
-{(content-type:get-content-type(request:get-uploaded-file-name("tokenize-wp-doc"), $req-content-type, "odt"),
-content-type:get-content-type(request:get-uploaded-file-name("train-classifier-spreadsheet-doc"), $req-content-type, "odt"),
-content-type:get-content-type(request:get-uploaded-file-name("classify-classifier"), $req-content-type, "odt"),
-content-type:get-content-type(request:get-uploaded-file-name("classify-wp-doc"), $req-content-type, "odt"))}</div>
+{(content-type:get-content-type(request:get-uploaded-file-name("tokenize-wp-doc"), $req-content-type, ""),
+content-type:get-content-type(request:get-uploaded-file-name("train-classifier-spreadsheet-doc"), $req-content-type, ""),
+content-type:get-content-type(request:get-uploaded-file-name("classify-classifier"), $req-content-type, ""),
+content-type:get-content-type(request:get-uploaded-file-name("classify-wp-doc"), $req-content-type, ""))}</div>
 return $result
