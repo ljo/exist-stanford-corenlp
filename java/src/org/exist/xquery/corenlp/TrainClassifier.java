@@ -338,7 +338,12 @@ public class TrainClassifier extends BasicFunction {
 		    cell = row.getCell(cellPos, Row.CREATE_NULL_AS_BLANK);
 		    switch (cellPos) {
 		    case 0:
-			tok.setWord(cell == null ? "" : cell.getStringCellValue());
+			if (cell != null && cell.getCellType() == Cell.CELL_TYPE_STRING) {
+			    tok.setWord(cell == null ? "" : cell.getStringCellValue());
+			} else if(cell != null && cell.getCellType() == Cell.CELL_TYPE_NUMERIC) {
+			    tok.setWord(cell == null ? "" : cell.getNumericCellValue() + "");
+			}
+
 			break;
 		    case 1:
 			tok.setNER(cell == null ? "" : cell.getStringCellValue());
