@@ -92,7 +92,7 @@ public class TrainClassifier extends BasicFunction {
     public final static FunctionSignature signatures[] = {
             new FunctionSignature(
                 new QName("train-classifier-spreadsheet-doc", StanfordCoreNLPModule.NAMESPACE_URI, StanfordCoreNLPModule.PREFIX),
-                "Train a CRF classifier based on anntations in the provided spreadsheet document. Returns a serialiezed model to use in CRF classification.",
+                "Train a CRF classifier based on annotations in the provided spreadsheet document. Returns a serialized model to use in CRF classification.",
                 new SequenceType[] {
                     new FunctionParameterSequenceType("classifier", Type.STRING, Cardinality.ZERO_OR_ONE,
                         "The fully qualified name of an alternative classifier to load. Must be available on the classpath."),
