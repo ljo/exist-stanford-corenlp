@@ -173,7 +173,12 @@ public class Spreadsheet {
 		String value = token.get(CoreAnnotations.OriginalTextAnnotation.class);
 		Row row = sheet.createRow(lineIndex);
 		row.createCell(0).setCellValue(creationHelper.createRichTextString(value));
-		row.createCell(1).setCellValue(creationHelper.createRichTextString(backgroundSymbol));
+		if (token.get(CoreAnnotations.AnswerAnnotation.class) == null) {
+		    row.createCell(1).setCellValue(creationHelper.createRichTextString(backgroundSymbol));
+		} else {
+		    row.createCell(1).setCellValue(creationHelper.createRichTextString(token.get(CoreAnnotations.AnswerAnnotation.class)));
+		}
+
 		lineIndex++;
 	    }
 	    Row row = sheet.createRow(lineIndex);
@@ -212,7 +217,11 @@ public class Spreadsheet {
 		    tsv.append("\"");
 		    tsv.append(separator);
 		    tsv.append("\"");
-		    tsv.append(backgroundSymbol);
+		    if (token.get(CoreAnnotations.AnswerAnnotation.class) == null) {
+			tsv.append(backgroundSymbol);
+		    } else {
+			tsv.append(token.get(CoreAnnotations.AnswerAnnotation.class));
+		    }
 		    tsv.append("\"");
 		    tsv.append("\n");
 		}
