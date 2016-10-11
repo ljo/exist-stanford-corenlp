@@ -72,6 +72,11 @@ import org.exist.xquery.*;
 import org.exist.xquery.corenlp.util.DefaultBinaryValueManager;
 import org.exist.xquery.value.*;
 import org.xml.sax.SAXException;
+import org.exist.xquery.corenlp.util.Spreadsheet.InputDocType;
+import org.exist.xquery.corenlp.util.Spreadsheet.OutDocType;
+import org.exist.xquery.corenlp.util.Spreadsheet.TextDocType;
+import org.exist.xquery.corenlp.util.Spreadsheet;
+import org.exist.xquery.corenlp.util.Textdocument;
 
 import org.jopendocument.dom.ODPackage;
 import org.jopendocument.dom.ODDocument;
@@ -129,10 +134,8 @@ public class Tokenize extends BasicFunction {
     private static PTBTokenizer<CoreLabel> cachedTokenizer = null;
     private AnalyzeContextInfo cachedContextInfo;
     private Properties parameters = new Properties();
-    private enum TextDocType {ODT, DOCX, DOC, TXT};
-    private enum OutDocType {ODS, XSLX, XSL, TSV};
 
-    private TextDocType inputFormat = TextDocType.ODT;
+    private InputDocType inputFormat = InputDocType.ODT;
     private OutDocType outputFormat = OutDocType.ODS;
     private String backgroundSymbol = "O";
     private String localFilePath = null;
@@ -174,13 +177,13 @@ public class Tokenize extends BasicFunction {
 		if ("inputFormat".equals(property)) {
 		    String value = parameters.getProperty(property);
 		    if ("odt".equals(value)) {
-			inputFormat = TextDocType.ODT;
+			inputFormat = InputDocType.ODT;
 		    } else if ("docx".equals(value)) {
-			inputFormat = TextDocType.DOCX;
+			inputFormat = InputDocType.DOCX;
 		    } else if ("doc".equals(value)) {
-			inputFormat = TextDocType.DOC;
+			inputFormat = InputDocType.DOC;
 		    } else if ("txt".equals(value)) {
-			inputFormat = TextDocType.TXT;
+			inputFormat = InputDocType.TXT;
 		    }
 		} else if ("outputFormat".equals(property)) {
 		    String value = parameters.getProperty(property);
@@ -205,7 +208,7 @@ public class Tokenize extends BasicFunction {
 		}
 	    }
  
-	    text = readTextDocument(inputFormat);
+	    text = Textdocument.readTextDocument(inputFormat, uploadedFileBase64String, localFilePath);
 
 	    BinaryValueManager bvm = new DefaultBinaryValueManager(context);
 	    Base64BinaryDocument bvfis = null; 
@@ -236,240 +239,7 @@ public class Tokenize extends BasicFunction {
 	cachedTokenizer = tokenizer;
 	List<CoreLabel> tokens = tokenizer.tokenize();
 	List<List<CoreLabel>> sentences = new WordToSentenceProcessor(WordToSentenceProcessor.NewlineIsSentenceBreak.TWO_CONSECUTIVE).wordsToSentences(tokens);
-	createSpreadsheet(sentences, tokens, outputFormat);
-    }
-
-    private String readTextDocument(final TextDocType textDocType) throws IOException {
-	if (uploadedFileBase64String == null) {
-	    if (localFilePath == null) {
-		return readLocalTextDocument(TextDocType.ODT, "/db/temp/swe-clarin/user-selection.odt");
-	    } else{
-		return readLocalTextDocument(textDocType, localFilePath);
-	    }
-	} else {
-	    return readUploadedTextDocument(textDocType);
-	}
-    }
-
-    private String readUploadedTextDocument(final TextDocType textDocType) throws IOException {
-	String text = "";
-	
-
-	switch (textDocType) {
-	case ODT:
-	    	try (InputStream is = uploadedFileBase64String.getInputStream()) {
-
-		    TextDocument utd = ODPackage.createFromStream(is, "UserTextDocument").getTextDocument();
-		    text = utd.getCharacterContent(true); //ooMode?
-		}
-	    break;
-	case DOCX:
-	    try (InputStream is = uploadedFileBase64String.getInputStream()) {
-		POITextExtractor extractor = ExtractorFactory.createExtractor(is);
-		text = extractor.getText();
-	    } catch (InvalidFormatException ife) {
-		LOG.error(ife);
-	    } catch (OpenXML4JException ox4e) {
-		LOG.error(ox4e);
-	    } catch (XmlException xe) {
-		LOG.error(xe);
-	    }
-	    break;
-	case DOC:
-	    try (InputStream is = uploadedFileBase64String.getInputStream()) {
-		POITextExtractor extractor = ExtractorFactory.createExtractor(is);
-		text = extractor.getText();
-	    } catch (InvalidFormatException ife) {
-		LOG.error(ife);
-	    } catch (OpenXML4JException ox4e) {
-		LOG.error(ox4e);
-	    } catch (XmlException xe) {
-		LOG.error(xe);
-	    }
-	    break;
-	case TXT:
-	    text = IOUtils.slurpInputStream(uploadedFileBase64String.getInputStream(), "UTF-8"); // Or null
-	    break;
-	}
-	return text;
-    }
-
-
-    private String readLocalTextDocument(final TextDocType textDocType, final String localFilePath) throws IOException {
-	String text = "";
-
-	switch (textDocType) {
-	case ODT:
-	    	try (InputStream is = new Resource(localFilePath).getInputStream()) {
-
-		    TextDocument utd = ODPackage.createFromStream(is, "UserTextDocument").getTextDocument();
-		    text = utd.getCharacterContent(true); //ooMode?
-		}
-	    break;
-	case DOCX:
-	    try (InputStream is = new Resource(localFilePath).getInputStream()) {
-		POITextExtractor extractor = ExtractorFactory.createExtractor(is);
-		//XWPFWordExtractor extractor = new XWPFWordExtractor(is);
-		text = extractor.getText();
-	    } catch (InvalidFormatException ife) {
-		LOG.error(ife);
-	    } catch (OpenXML4JException ox4e) {
-		LOG.error(ox4e);
-	    } catch (XmlException xe) {
-		LOG.error(xe);
-	    }
-	    break;
-	case DOC:
-	    try (InputStream is = new Resource(localFilePath).getInputStream()) {
-		POITextExtractor extractor = ExtractorFactory.createExtractor(is);
-		//XWPFWordExtractor extractor = new XWPFWordExtractor(is);
-		text = extractor.getText();
-	    } catch (InvalidFormatException ife) {
-		LOG.error(ife);
-	    } catch (OpenXML4JException ox4e) {
-		LOG.error(ox4e);
-	    } catch (XmlException xe) {
-		LOG.error(xe);
-	    }
-	    break;
-	case TXT:
-	    File file = new Resource(localFilePath);
-	    text = IOUtils.slurpFileNoExceptions(file);
-	    break;
-	}
-	return text;
-    }
-
-    private void createSpreadsheet(List<List<CoreLabel>> sentences, List<CoreLabel> tokens,  final OutDocType outputFormat) {
-	switch(outputFormat) {
-	case ODS:
-	    createODSSpreadsheet(sentences, tokens);
-	    break;
-	case XSLX:
-	    createXSLXSpreadsheet(sentences, tokens);
-	    break;
-	case XSL:
-	    createXSLXSpreadsheet(sentences, tokens);
-	    break;
-	case TSV:
-	    createTSVSpreadsheet(sentences, tokens);
-	    break;
-	}
-    }
-
-    private void createODSSpreadsheet(List<List<CoreLabel>> sentences, List<CoreLabel> tokens) {
-	SpreadSheet spreadSheet = SpreadSheet.create(1, 2, sentences.size() + tokens.size());
-
-	Sheet sheet = spreadSheet.getSheet(0);
-
-	int lineIndex = 0;
-	for (List<CoreLabel> sentence : sentences) {
-	    for (CoreLabel token : sentence) {
-		String value = token.get(CoreAnnotations.OriginalTextAnnotation.class);
-		sheet.setValueAt(value, 0, lineIndex);
-		sheet.setValueAt(backgroundSymbol, 1, lineIndex);
-		lineIndex++;
-	    }
-	    sheet.setValueAt("", 0, lineIndex);
-	    sheet.setValueAt("", 1, lineIndex);
-	    lineIndex++;
-	}
-
-	try (OutputStream os = Files.newOutputStream(tempOutFile)) {
-	    spreadSheet.getPackage().save(os);
-	} catch (FileNotFoundException fe) {
-	    LOG.error(fe);
-	} catch (IOException ioe) {
-	    LOG.error(ioe);
-	} finally {
-	    if (spreadSheet != null) {
-		spreadSheet = null;
-	    }
-	}
-    }
-
-    private void createXSLXSpreadsheet(List<List<CoreLabel>> sentences, List<CoreLabel> tokens) {
-	Workbook workbook = null;
-	if (outputFormat == OutDocType.XSLX) {
-	    workbook = new SXSSFWorkbook();
-	} else {
-	    workbook = new HSSFWorkbook();
-	}
-	CreationHelper creationHelper = workbook.getCreationHelper();
-	org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet();
-	
-	Font boldFont = workbook.createFont();
-	boldFont.setBoldweight(Font.BOLDWEIGHT_BOLD);
-		
-	// Header
-	CellStyle headerStyle = workbook.createCellStyle();
-	headerStyle.setFont(boldFont);
-	int lineIndex = 0;
-	for (List<CoreLabel> sentence : sentences) {
-	    for (CoreLabel token : sentence) {
-		String value = token.get(CoreAnnotations.OriginalTextAnnotation.class);
-		Row row = sheet.createRow(lineIndex);
-		row.createCell(0).setCellValue(creationHelper.createRichTextString(value));
-		row.createCell(1).setCellValue(creationHelper.createRichTextString(backgroundSymbol));
-		lineIndex++;
-	    }
-	    Row row = sheet.createRow(lineIndex);
-	    row.createCell(0).setCellValue(creationHelper.createRichTextString(""));
-	    row.createCell(1).setCellValue(creationHelper.createRichTextString(""));
-	    lineIndex++;
-	}
-
-	try (OutputStream os = Files.newOutputStream(tempOutFile)) { 
-	    workbook.write(os);
-	} catch (FileNotFoundException fe) {
-	    LOG.error(fe);
-	} catch (IOException ioe) {
-	    LOG.error(ioe);
-	} finally {
-	    if (workbook != null) {
-		if (workbook instanceof SXSSFWorkbook) {
-		    ((SXSSFWorkbook) workbook).dispose();
-		} else {
-		    workbook = null;
-		}
-	    }
-	}
-    }
-
-    private void createTSVSpreadsheet(List<List<CoreLabel>> sentences, List<CoreLabel> tokens) {
-	BufferedWriter tsv = null;
-	String separator = "\t";
-	try {
-	    tsv = Files.newBufferedWriter(tempOutFile);
-	    for (List<CoreLabel> sentence : sentences) {
-		for (CoreLabel token : sentence) {
-		    String value = token.get(CoreAnnotations.OriginalTextAnnotation.class);
-		    tsv.append("\"");
-		    tsv.append(value);
-		    tsv.append("\"");
-		    tsv.append(separator);
-		    tsv.append("\"");
-		    tsv.append(backgroundSymbol);
-		    tsv.append("\"");
-		    tsv.append("\n");
-		}
-		tsv.append("\n");
-	    }
-	    tsv.close();
-	} catch (FileNotFoundException fe) {
-	    LOG.error(fe);
-	} catch (IOException ioe) {
-	    LOG.error(ioe);
-	} finally {
-	    if (tsv != null) {
-		tsv = null;
-	    }
-	}
+	Spreadsheet.createSpreadsheet(sentences, tokens.size(), outputFormat, tempOutFile, backgroundSymbol);
     }
 
 }
-
-
-
-
-

@@ -41,6 +41,8 @@ public class StanfordCoreNLPModule extends AbstractInternalModule {
         new FunctionDef(Classify.signatures[3], Classify.class),
         new FunctionDef(Classify.signatures[4], Classify.class),
         new FunctionDef(Classify.signatures[5], Classify.class),
+        new FunctionDef(ClassifyUploaded.signatures[0], ClassifyUploaded.class),
+        new FunctionDef(ClassifyUploaded.signatures[1], ClassifyUploaded.class),
         new FunctionDef(TrainClassifier.signatures[0], TrainClassifier.class),
         new FunctionDef(Tokenize.signatures[0], Tokenize.class),
         new FunctionDef(Tokenize.signatures[1], Tokenize.class),

@@ -36,6 +36,20 @@ let $result :=
     </parameters>
     return
       response:stream-binary(corenlp:train-classifier-spreadsheet-doc("edu.stanford.nlp.ie.crf.CRFClassifier", $train-config, request:get-uploaded-file-data("train-classifier-spreadsheet-doc")), "application/octet-stream", "user-crf-3class-model." || $train-output-format)
+
+    else if ($req-mode eq "classify") then 
+    let $classify-input-format := content-type:get-content-type(request:get-uploaded-file-name("classify-wp-doc"), $req-content-type, "odt")
+    let $classify-output-format := content-type:get-output-type-from-input-type($classify-input-format)
+    let $classify-config := 
+    <parameters>
+        <param name="inputFormat" value="{$classify-input-format}" />
+        <param name="outputFormat" value="{$classify-output-format}" />
+        <param name="classifierGZipped" value="{ends-with(request:get-uploaded-file-name("classify-classifier"), ".gz")}" />
+        <param name="backgroundSymbol" value="O" />
+        <param name="tokenizeNLs" value="false" />
+    </parameters>
+    return 
+      response:stream-binary(corenlp:classify-wp-doc(request:get-uploaded-file-data("classify-classifier"), $classify-config, request:get-uploaded-file-data("classify-wp-doc")), content-type:get-content-mimetype($classify-output-format), "user-classified-two-column." || $classify-output-format)
     else 
     <div>Unknown mode {$req-mode} for document(s) {(request:get-uploaded-file-name("tokenize-wp-doc"), request:get-uploaded-file-name("train-classifier-spreadsheet-doc"), request:get-uploaded-file-name("classify-wp-doc"), request:get-uploaded-file-name("classify-classifier"))} with content type {$req-content-type} and short-type of 
 {(content-type:get-content-type(request:get-uploaded-file-name("tokenize-wp-doc"), $req-content-type, ""),

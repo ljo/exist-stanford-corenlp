@@ -80,6 +80,8 @@ import org.exist.xquery.*;
 import org.exist.xquery.corenlp.util.DefaultBinaryValueManager;
 import org.exist.xquery.value.*;
 import org.xml.sax.SAXException;
+import org.exist.xquery.corenlp.util.Spreadsheet.InputDocType;
+import org.exist.xquery.corenlp.util.Spreadsheet;
 
 import org.jopendocument.dom.ODPackage;
 import org.jopendocument.dom.ODDocument;
@@ -111,7 +113,6 @@ public class TrainClassifier extends BasicFunction {
     private BinaryValueFromBinaryString uploadedFileBase64String = null;
     private AnalyzeContextInfo cachedContextInfo;
     private Properties parameters = new Properties();
-    private enum InputDocType {ODS, XLSX, XLS, TSV};
     private InputDocType inputFormat = InputDocType.ODS;
     private boolean gzipOutput = true;
     private String classifierClassPath = null;
@@ -183,7 +184,7 @@ public class TrainClassifier extends BasicFunction {
 		} 
 	    }
  
-	    documents = readSpreadsheet(inputFormat);
+	    documents = Spreadsheet.readSpreadsheet(inputFormat, uploadedFileBase64String, localFilePath, tagCol);
 
 	    BinaryValueManager bvm = new DefaultBinaryValueManager(context);
 	    Base64BinaryDocument bvfis = null;
@@ -243,172 +244,4 @@ public class TrainClassifier extends BasicFunction {
 	    classifier.serializeClassifier(tempOutFile.toAbsolutePath().toString());
 	}
     }
-
-    private Collection<List<CoreLabel>> readSpreadsheet(final InputDocType inputFormat) throws XPathException {
-	Collection<List<CoreLabel>> res = null;
-	if (uploadedFileBase64String == null && localFilePath == null) {
-	    res = readODSSpreadsheet("/db/temp/swe-clarin/user-annotated.ods");
-	} else {
-	    switch(inputFormat) {
-	    case ODS:
-		res = readODSSpreadsheet(localFilePath);
-		break;
-	    case XLSX:
-		res = readXLSXSpreadsheet(localFilePath, inputFormat);
-		break;
-	    case XLS:
-		res = readXLSXSpreadsheet(localFilePath, inputFormat);
-		break;
-	    case TSV:
-		res = readTSVSpreadsheet(localFilePath);
-		break;
-	    }
-	}
-	return res;
-    }
-
-    private Collection<List<CoreLabel>> readODSSpreadsheet(final String localFilePath) throws XPathException {
-	Collection<List<CoreLabel>> documents = new ArrayList<>();
-	List<CoreLabel> document = new ArrayList<>();
-	SpreadSheet spreadSheet = null;
-
-	//try (InputStream is = Files.newInputStream(tempInFile)) {
-	try (InputStream is = uploadedFileBase64String != null ? uploadedFileBase64String.getInputStream() : new Resource(localFilePath).getInputStream()) {
-	    spreadSheet = ODPackage.createFromStream(is, "UserAnnotatedDocument").getSpreadSheet();
-	} catch (IOException ioe) {
-	    throw new XPathException(this, "Error while reading spreadsheet document: " + ioe.getMessage(), ioe);
-	}
-
-	Sheet sheet = spreadSheet.getSheet(0);
-	    
-	for (int i = 0; i < sheet.getRowCount(); i++) {
-	    CoreLabel tok = new CoreLabel();
-	    String value1 = sheet.getValueAt(0, i).toString();
-	    String value2 = sheet.getValueAt(1, i).toString();
-
-	    tok.setWord(value1);
-	    tok.setNER(value2);
-	    tok.set(CoreAnnotations.AnswerAnnotation.class, value2);
-	    if (sheet.getColumnCount() > 2) {
-		String value3 = sheet.getValueAt(2, i).toString();
-		if (!"".equals(value3) && tagCol > -1) {
-		    tok.setTag(value3);
-		}
-	    }
-
-	    if (!"".equals(value1)) {
-		document.add(tok);
-	    } else {
-		documents.add(document);
-		document = new ArrayList<>();
-	    }
-	}
-	if (document.size() > 0) {
-	    documents.add(document);
-	}
-	return documents;
-    }
-
-    private Collection<List<CoreLabel>> readXLSXSpreadsheet(final String localFilePath, final InputDocType inputFormat) throws XPathException {
-	Workbook workbook = null;
-	Collection<List<CoreLabel>> documents = new ArrayList<>();
-	List<CoreLabel> document = new ArrayList<>();
-
-	// try (InputStream is = Files.newInputStream(tempInFile)) {
-	try (InputStream is = uploadedFileBase64String != null ? uploadedFileBase64String.getInputStream() : new Resource(localFilePath).getInputStream()) {
-	    if (inputFormat == InputDocType.XLSX) {
-		workbook = new XSSFWorkbook(is);
-	    } else {
-		workbook = new HSSFWorkbook(is);
-	    }
-	} catch (FileNotFoundException fe) {
-	    LOG.error(fe);
-	} catch (IOException ioe) {
-	    LOG.error(ioe);
-	    throw new XPathException(this, "Error while reading spreadsheet document: " + ioe.getMessage(), ioe);
-	}
-	org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
-	Row row;
-	Cell cell;
-	for (int rowPos = 0; rowPos <= sheet.getLastRowNum(); rowPos++) {
-	    CoreLabel tok = new CoreLabel();
-	    row = (Row) sheet.getRow(rowPos);
-	    if (row != null) {
-		for (int cellPos = 0; cellPos < row.getLastCellNum(); cellPos++) {
-		    cell = row.getCell(cellPos, Row.CREATE_NULL_AS_BLANK);
-		    switch (cellPos) {
-		    case 0:
-			if (cell != null && cell.getCellType() == Cell.CELL_TYPE_STRING) {
-			    tok.setWord(cell == null ? "" : cell.getStringCellValue());
-			} else if(cell != null && cell.getCellType() == Cell.CELL_TYPE_NUMERIC) {
-			    tok.setWord(cell == null ? "" : cell.getNumericCellValue() + "");
-			}
-			break;
-		    case 1:
-			if (cell != null && cell.getCellType() == Cell.CELL_TYPE_STRING) {
-			    tok.setNER(cell == null ? "" : cell.getStringCellValue());
-			    tok.set(CoreAnnotations.AnswerAnnotation.class, cell == null ? "O" : cell.getStringCellValue());
-			} else if(cell != null && cell.getCellType() == Cell.CELL_TYPE_NUMERIC) {
-			    tok.setNER(cell == null ? "" : cell.getNumericCellValue() + "");
-			    tok.set(CoreAnnotations.AnswerAnnotation.class, cell == null ? "O" : cell.getNumericCellValue() + "");
-			}
-			break;
-		    case 2:
-			if (cell != null && cell.getCellType() == Cell.CELL_TYPE_STRING) {
-			    tok.setTag(cell == null ? "" : cell.getStringCellValue());
-			} else if(cell != null && cell.getCellType() == Cell.CELL_TYPE_NUMERIC) {
-			    tok.setTag(cell == null ? "" : cell.getNumericCellValue() + "");
-			}
-			break;
-		    default: break;
-		    }
-		}
-	    }
-	    if (row != null && !"".equals(tok.word())) {
-		document.add(tok);
-	    } else {
-		documents.add(document);
-		document = new ArrayList<>(); 
-	    }
-	}
-	if (document.size() > 0) {
-	    documents.add(document);
-	}
-	return documents;
-    }
-
-    private Collection<List<CoreLabel>> readTSVSpreadsheet(final String localFilePath) throws XPathException {
-	String separator = "\t";
-	String line;
-	Collection<List<CoreLabel>> documents = new ArrayList<>();
-	List<CoreLabel> document = new ArrayList<>();
-
-	//try (BufferedReader tsv = Files.newBufferedReader(tempInFile)) {
-	try (BufferedReader tsv = uploadedFileBase64String != null ? new BufferedReader(new InputStreamReader(uploadedFileBase64String.getInputStream(), "UTF-8")) : new Resource(localFilePath).getBufferedReader()) {
-	    while ((line = tsv.readLine()) != null) {
-		CoreLabel tok = new CoreLabel();
-		List<String> cells = Arrays.asList(line.split(separator));
-		if (cells.size() > 0 && !"".equals(cells.get(0))) {
-		    tok.setWord(cells.get(0));
-		    tok.setNER(cells.get(1));
-		    tok.set(CoreAnnotations.AnswerAnnotation.class, cells.get(1));
-		    if (cells.size() > 2 && !"".equals(cells.get(2))) {
-			tok.setTag(cells.get(2));
-		    }
-		    document.add(tok);
-		} else {
-		    documents.add(document);
-		    document = new ArrayList<>();
-		}
-	    }
-	    if (document.size() > 0) {
-		documents.add(document);
-	    }
-	} catch (IOException ioe) {
-	    LOG.error(ioe);
-	    throw new XPathException(this, "Error while reading spreadsheet document: " + ioe.getMessage(), ioe);
-	}
-	return documents;
-    }
-
 }
